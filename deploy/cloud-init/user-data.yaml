@@ -1,0 +1,57 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - git
+  - python3.11
+  - python3.11-venv
+  - nginx
+
+write_files:
+  - path: /etc/cyprine-heroes/backend.env
+    owner: root:root
+    permissions: '0600'
+    content: |
+      # Fill these before first boot or update after boot then restart service.
+      DATABASE_URL=postgresql+psycopg://user:password@host:5432/dbname
+      SECRET_KEY=change-me
+      ADMIN_PASSWORD=change-me
+      UPLOAD_DIR=/opt/cyprine-heroes/backend/uploads
+      CORS_ORIGINS=https://your-domain.tld
+
+runcmd:
+  - bash -lc 'adduser --system --group cyprine || true'
+  - bash -lc 'mkdir -p /opt/cyprine-heroes && chown -R cyprine:www-data /opt/cyprine-heroes'
+
+  # Install Node.js 20 (for Vite build)
+  - bash -lc 'curl -fsSL https://deb.nodesource.com/setup_20.x | bash -'
+  - bash -lc 'apt-get install -y nodejs'
+
+  # Clone repo and build
+  - bash -lc 'cd /opt/cyprine-heroes && sudo -u cyprine -H git clone https://github.com/ChristopherRuby/cyprine-heroes.git . || true'
+  - bash -lc 'cd /opt/cyprine-heroes && sudo -u cyprine -H git pull --rebase'
+
+  # Python venv and backend deps
+  - bash -lc 'cd /opt/cyprine-heroes && python3.11 -m venv venv && source venv/bin/activate && pip install --upgrade pip && pip install -r backend/requirements.txt'
+
+  # Frontend build
+  - bash -lc 'cd /opt/cyprine-heroes/frontend && sudo -u cyprine -H npm ci && sudo -u cyprine -H npm run build'
+
+  # Uploads dir
+  - bash -lc 'mkdir -p /opt/cyprine-heroes/backend/uploads && chown -R cyprine:www-data /opt/cyprine-heroes/backend/uploads'
+
+  # systemd service
+  - bash -lc 'cp /opt/cyprine-heroes/deploy/systemd/cyprine-backend.service /etc/systemd/system/cyprine-backend.service'
+  - bash -lc 'systemctl daemon-reload'
+  - bash -lc 'systemctl enable cyprine-backend'
+
+  # Nginx site
+  - bash -lc 'cp /opt/cyprine-heroes/deploy/nginx/cyprine-frontend.conf /etc/nginx/sites-available/cyprine-frontend'
+  - bash -lc 'ln -sf /etc/nginx/sites-available/cyprine-frontend /etc/nginx/sites-enabled/cyprine-frontend'
+  - bash -lc 'rm -f /etc/nginx/sites-enabled/default && nginx -t && systemctl reload nginx'
+
+  # DB migrations (will no-op if DATABASE_URL invalid)
+  - bash -lc 'source /opt/cyprine-heroes/venv/bin/activate && cd /opt/cyprine-heroes/backend && alembic upgrade head || true'
+
+  # Start backend
+  - bash -lc 'systemctl restart cyprine-backend'
