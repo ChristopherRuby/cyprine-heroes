@@ -1,0 +1,30 @@
+# Cyprine Heroes - Production Environment Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS Configuration
+aws_region = "eu-west-3"  # Paris region for EU compliance
+
+# Infrastructure Configuration  
+instance_type = "t3.small"  # Adjust based on your needs (t3.micro for testing)
+volume_size   = 20          # GB - Adjust based on storage needs
+
+# Security Configuration
+key_name = "your-key-name"  # Your AWS key pair name (create with: aws ec2 create-key-pair --key-name your-key-name)
+
+# IMPORTANT: Restrict SSH access to your IP for security
+# Get your IP with: curl -s https://ipv4.icanhazip.com
+allowed_ssh_cidrs = ["YOUR.PUBLIC.IP.ADDRESS/32"]  # Replace with your public IP
+
+# Application Configuration
+# REQUIRED: Configure these sensitive values
+database_url   = "postgresql+psycopg://user:password@host:5432/dbname"
+secret_key     = "your-super-secret-key-here"  # Generate with: openssl rand -base64 32
+admin_password = "your-admin-password"
+
+# Optional Configuration
+cors_origins = "*"  # Set to your domain in production: "https://yourdomain.com"
+github_repo  = "https://github.com/ChristopherRuby/cyprine-heroes.git"
+
+# Project Metadata
+project_name = "cyprine-heroes"
+environment  = "prod"

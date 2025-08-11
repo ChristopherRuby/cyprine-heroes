@@ -121,6 +121,10 @@ const Home: React.FC = () => {
           <p className="text-xl text-center text-gray-300">
             Assemble et viens boire une cyprinade ! 🍺
           </p>
+          <p className="text-center text-gray-400 mt-4 max-w-2xl mx-auto">
+            Application web de divertissement dédiée à la composition d'équipes de héros thématiques. 
+            Découvrez notre galerie, créez votre équipe parfaite et explorez l'univers ludique de la Cyprine.
+          </p>
         </div>
       </header>
 
@@ -167,6 +171,9 @@ const Home: React.FC = () => {
       <footer className="bg-cyprine-darker border-t border-gray-700 mt-16">
         <div className="container mx-auto px-6 py-6 text-center text-gray-400">
           <p>&copy; 2024 Les héros de la Cyprine - Tous droits réservés</p>
+          <p className="mt-2 text-sm">
+            Application web de divertissement - Jeu de composition d'équipes - Contenu ludique et familial
+          </p>
         </div>
       </footer>
     </div>
