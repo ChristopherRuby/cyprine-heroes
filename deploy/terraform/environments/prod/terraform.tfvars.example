@@ -17,7 +17,7 @@ allowed_ssh_cidrs = ["YOUR.PUBLIC.IP.ADDRESS/32"]  # Replace with your public IP
 
 # Application Configuration
 # REQUIRED: Configure these sensitive values
-database_url   = "postgresql+psycopg://user:password@host:5432/dbname"
+database_url   = "postgresql+psycopg://cyprine_user:cyprinadeApp21@localhost:5432/cyprine_heroes"
 secret_key     = "your-super-secret-key-here"  # Generate with: openssl rand -base64 32
 admin_password = "your-admin-password"
 

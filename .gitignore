@@ -34,6 +34,7 @@ htmlcov/
 .env.local
 backend/.env
 frontend/.env
+database/.env
 .env.*.local
 .venv/
 venv/
@@ -50,3 +51,35 @@ backend/alembic/*.pyc
 # Uploads (keep directory via .gitkeep)
 backend/uploads/
 !backend/uploads/.gitkeep
+
+# Terraform & AWS Secrets
+*.tfvars
+*.tfvars.json
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+*.tfplan.out
+
+# AWS Credentials
+.aws/
+aws-credentials
+aws-config
+*.pem
+*.key
+id_rsa*
+id_ecdsa*
+id_ed25519*
+
+# Secrets & Configuration Files
+secrets.json
+secrets.yaml
+secrets.yml
+config/secrets/
+.secrets/
+
+# Backup files that may contain secrets
+*.backup
+*.bak
+*.orig

@@ -4,51 +4,101 @@ Production-ready deployment using **Infrastructure as Code** (Terraform) with **
 
 ## 🏗️ Architecture Overview
 
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        AWS EC2 Instance                        │
+│                         (t3.small)                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐    ┌─────────────────────────────────────┐    │
+│  │   Nginx     │    │              React Frontend          │    │
+│  │   (Port 80) │────▶  (Vite build → /dist)              │    │
+│  │             │    │  • Dynamic API URL detection        │    │
+│  └─────────────┘    │  • Hero management interface        │    │
+│         │            └─────────────────────────────────────┘    │
+│         │ API Proxy                                             │
+│         ▼                                                       │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              FastAPI Backend                           │    │
+│  │              (Port 8000)                               │    │
+│  │  • REST API endpoints (/api/heroes, /api/auth)        │    │
+│  │  • JWT Authentication                                  │    │
+│  │  • File upload handling                               │    │
+│  │  • Pydantic validation                                │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              │                                  │
+│                              ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │            PostgreSQL 16 Database                      │    │
+│  │            (Local installation)                        │    │
+│  │  • Database: cyprine_heroes                           │    │
+│  │  • User: cyprine_user                                 │    │
+│  │  • Tables: heroes, alembic_version                    │    │
+│  │  • Automatic migrations via Alembic                   │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │      Internet Users     │
+                    │   via Elastic IP        │
+                    │   (HTTP Port 80)        │
+                    └─────────────────────────┘
+```
+
+### 🏗️ **Composants et Relations**
+
 - **Infrastructure**: Terraform-managed AWS EC2 with Elastic IP
-- **Application**: FastAPI backend + React frontend
-- **Web Server**: Nginx reverse proxy with SSL support
-- **Database**: PostgreSQL (external - RDS/Neon/etc.)
+- **Web Server**: Nginx reverse proxy (Port 80 → Backend 8000)
+- **Frontend**: React (Vite) with dynamic API URL configuration
+- **Backend**: FastAPI with JWT auth and file upload
+- **Database**: PostgreSQL 16 (local installation)
+- **Process Management**: systemd services with dependencies
 - **Monitoring**: systemd journal + custom health checks
-- **Security**: Hardened systemd service + firewall
+- **Security**: Hardened systemd service + UFW firewall
 
 ## 📁 Directory Structure
 
 ```
-deploy/
-├── README.md                          # This file
-├── terraform/                         # 🆕 Infrastructure as Code
-│   ├── environments/
-│   │   └── prod/                      # Production environment
-│   │       ├── main.tf               # Main Terraform config
-│   │       ├── variables.tf          # Variable definitions
-│   │       ├── outputs.tf            # Output definitions
-│   │       └── terraform.tfvars.example  # Configuration template
-│   ├── modules/
-│   │   ├── ec2/                      # EC2 instance module
-│   │   │   ├── main.tf              # Instance + EIP configuration
-│   │   │   ├── security_groups.tf   # Security group rules
-│   │   │   ├── user_data.sh         # Automated setup script
-│   │   │   ├── variables.tf         # Module variables
-│   │   │   └── outputs.tf           # Module outputs
-│   │   └── rds/                     # 🔜 RDS module (future)
-│   ├── shared/                       # Shared configuration
-│   │   ├── providers.tf             # AWS provider setup
-│   │   ├── variables.tf             # Global variables
-│   │   └── outputs.tf               # Shared outputs
-│   └── scripts/                     # 🆕 Infrastructure scripts
-│       ├── deploy-infra.sh          # Main deployment script
-│       ├── manage-instance.sh       # Instance management
-│       └── backup.sh                # 🔜 Backup management
-├── provisioning/                    # Application provisioning
-│   ├── cloud-init/                  # Legacy cloud-init files
-│   ├── nginx/                       # Nginx configuration
-│   ├── systemd/                     # systemd service files
-│   ├── scripts/                     # Application deployment scripts
-│   └── env/                         # Environment templates
-└── docs/                           # 📖 Documentation
-    ├── infrastructure.md           # Infrastructure guide
-    ├── deployment.md               # Deployment procedures
-    └── operations.md               # Operations handbook
+project-root/
+├── backend/                           # 🎯 FastAPI Application
+│   ├── app/                          # Application code
+│   │   ├── api/endpoints/            # API routes (heroes, auth)
+│   │   ├── core/                     # Core config & security
+│   │   ├── db/                       # Database session management
+│   │   ├── models/                   # SQLAlchemy models
+│   │   └── schemas/                  # Pydantic schemas
+│   ├── alembic/                      # Database migrations
+│   ├── requirements.txt              # Python dependencies
+│   └── .env                          # Runtime environment config
+├── frontend/                         # ⚛️ React Application
+│   ├── src/                          # React source code
+│   │   ├── components/               # React components
+│   │   ├── services/                 # API client
+│   │   └── pages/                    # Application pages
+│   ├── dist/                         # Built assets (served by Nginx)
+│   ├── package.json                  # Node.js dependencies
+│   └── .env                          # Build-time environment (API URL)
+├── database/                         # 🆕 Database Management
+│   ├── .env                          # Database connection config
+│   ├── .env.example                  # Database config template
+│   └── seed_heroes.py                # Sample data initialization
+└── deploy/                           # 🚀 Infrastructure & Deployment
+    ├── README.md                     # This file
+    ├── terraform/                    # Infrastructure as Code
+    │   ├── environments/prod/        # Production environment config
+    │   ├── modules/ec2/              # EC2 instance module
+    │   │   ├── user_data.sh          # 🔧 Automated setup script
+    │   │   └── *.tf                  # Terraform configurations
+    │   └── scripts/                  # Infrastructure management
+    │       ├── deploy-infra.sh       # Main deployment script
+    │       └── manage-instance.sh    # Instance operations
+    ├── provisioning/                 # Application provisioning
+    │   ├── nginx/                    # Nginx reverse proxy config
+    │   ├── systemd/                  # systemd service definitions
+    │   └── scripts/                  # Application deployment
+    └── docs/                         # Documentation
 ```
 
 ## 🚀 Quick Start
@@ -88,8 +138,8 @@ deploy/
    # Edit terraform.tfvars with your values:
    # - key_name: Your AWS key pair name
    # - allowed_ssh_cidrs: Your public IP (/32)
-   # - database_url: Your PostgreSQL connection string
-   # - secret_key: Generated secret (openssl rand -base64 32)
+   # - database_url: PostgreSQL connection (configured automatically)
+   # - secret_key: See "Secure Secret Management" section below
    # - admin_password: Your admin password
    ```
 
@@ -106,6 +156,53 @@ deploy/
    ./deploy-infra.sh output   # Show all outputs
    ./deploy-infra.sh ssh      # Connect to instance
    ```
+
+## 🔐 Secure Secret Management
+
+### JWT Secret Key Setup
+
+The `secret_key` is critical for JWT token authentication security. Use AWS Parameter Store for secure storage:
+
+```bash
+# 1. Generate and store secret in AWS Parameter Store
+aws ssm put-parameter --name "/cyprine-heroes/prod/secret-key" \
+  --value "$(openssl rand -base64 32)" \
+  --type "SecureString"
+
+# 2. Retrieve the secret for terraform.tfvars
+SECRET_KEY=$(aws ssm get-parameter --name "/cyprine-heroes/prod/secret-key" \
+  --with-decryption --query 'Parameter.Value' --output text)
+
+# 3. Add to terraform.tfvars
+echo "secret_key = \"$SECRET_KEY\"" >> terraform.tfvars
+```
+
+### Alternative: Environment Variables
+```bash
+# Set as environment variable (Terraform will auto-detect TF_VAR_*)
+export TF_VAR_secret_key="$(openssl rand -base64 32)"
+
+# No need to add to terraform.tfvars file
+```
+
+### Security Best Practices
+- **Never commit secrets** to Git repositories
+- **Use AWS Parameter Store** for production secrets
+- **Rotate secrets regularly** (recommended: every 90 days)
+- **Set file permissions**: `chmod 600 terraform.tfvars`
+- **Add to .gitignore**: `echo "terraform.tfvars" >> .gitignore`
+
+### Other Sensitive Variables
+Apply the same pattern for other secrets:
+```bash
+# Store admin password
+aws ssm put-parameter --name "/cyprine-heroes/prod/admin-password" \
+  --value "your-secure-admin-password" \
+  --type "SecureString"
+
+# Database URL is automatically configured for local PostgreSQL
+# No need to store database credentials in Parameter Store
+```
 
 ## 🛠️ Management Commands
 
@@ -187,8 +284,8 @@ cd /opt/cyprine-heroes/deploy/provisioning/scripts/
 # 1. Restrict SSH access in terraform.tfvars
 allowed_ssh_cidrs = ["YOUR.IP.ADDRESS/32"]
 
-# 2. Use strong passwords and keys
-secret_key = "$(openssl rand -base64 32)"
+# 2. Use strong passwords and keys (see "Secure Secret Management" section)
+# Store secrets in AWS Parameter Store, not in files
 
 # 3. Regular updates (automated in user_data.sh)
 apt-get update && apt-get upgrade -y
@@ -375,13 +472,30 @@ sudo vim /etc/cyprine-heroes/backend.env
 sudo systemctl restart cyprine-backend
 ```
 
-### Database Migration (RDS)
+### Database Management
+
+Local PostgreSQL 16 is automatically installed and configured:
+
 ```bash
-# 1. Create RDS instance via Terraform (future module)
-# 2. Migrate existing data
-# 3. Update DATABASE_URL
-# 4. Restart application
+# Connect to database
+./deploy-infra.sh ssh
+sudo -u postgres psql -d cyprine_heroes
+
+# Database backup
+sudo -u postgres pg_dump cyprine_heroes > backup.sql
+
+# Database restore
+sudo -u postgres psql -d cyprine_heroes < backup.sql
+
+# View database status
+sudo systemctl status postgresql
 ```
+
+**Database Configuration:**
+- **Database**: `cyprine_heroes`
+- **User**: `cyprine_user` (full privileges)
+- **Connection**: `localhost:5432`
+- **Version**: PostgreSQL 16
 
 ### Multi-Environment Setup
 ```bash
@@ -393,21 +507,109 @@ terraform init
 terraform apply
 ```
 
+## 🔄 Recent Improvements (v2.2)
+
+### ✅ **Database & Installation Reliability**
+- **🐘 Local PostgreSQL 16**: Complete local database setup with proper user management
+- **⚡ Installation Sequence**: Fixed PostgreSQL → Backend initialization order
+- **🔄 Database Connectivity**: Active waiting and connectivity verification before migrations
+- **🎯 Sample Data**: Automated hero seeding with `database/seed_heroes.py`
+- **⚙️ Service Dependencies**: systemd services with proper PostgreSQL dependencies
+
+### ✅ **Configuration & Error Handling**  
+- **🔧 Pydantic Model**: Fixed `cors_origins` field missing in Settings model
+- **📋 Environment Management**: Centralized database config in `database/` directory
+- **🚨 Error Visibility**: Improved logging and error detection in user_data.sh
+- **🔍 Migration Diagnostics**: Explicit success/failure reporting for database migrations
+
+### 🔧 **Technical Implementation**
+```bash
+# PostgreSQL readiness verification
+for i in {1..30}; do
+    if sudo -u postgres psql -c "SELECT 1;" > /dev/null 2>&1; then
+        log "PostgreSQL is ready"
+        break
+    fi
+    sleep 2
+done
+
+# Application connectivity test before migrations
+python -c "
+from app.core.config import settings
+import psycopg
+conn = psycopg.connect(settings.database_url)
+conn.close()
+print('Database connection successful')
+"
+
+# systemd service with database dependency
+[Unit]
+After=network.target postgresql.service
+Requires=postgresql.service
+```
+
+### 📊 **Database Configuration**
+```bash
+# Automatic database setup
+DATABASE_NAME=cyprine_heroes
+DATABASE_USER=cyprine_user  
+DATABASE_PASSWORD=cyprinadeApp21
+DATABASE_URL=postgresql+psycopg://cyprine_user:cyprinadeApp21@localhost:5432/cyprine_heroes
+
+# Sample heroes automatically created
+- Tony Stark (Iron Man)
+- Natasha Romanoff (Black Widow)  
+- Loki Laufeyson (God of Mischief)
+- Steve Rogers (Captain America)
+- Bruce Banner (The Hulk)
+```
+
+### 🔄 **Installation Flow (Corrected Order)**
+```mermaid
+graph TD
+    A[System Updates] --> B[Install PostgreSQL 16]
+    B --> C[Start PostgreSQL Service]
+    C --> D[Wait PostgreSQL Ready]
+    D --> E[Create Database & User]
+    E --> F[Test DB Connectivity]
+    F --> G[Install Node.js & Python]
+    G --> H[Clone Repository]
+    H --> I[Configure Frontend .env]
+    I --> J[Build Frontend]
+    J --> K[Install Python Dependencies]
+    K --> L[Test App → DB Connection]
+    L --> M[Run Alembic Migrations]
+    M --> N[Configure Nginx]
+    N --> O[Create systemd Service]
+    O --> P[Start Backend Service]
+    P --> Q[Initialize Sample Data]
+    Q --> R[Application Ready! 🎉]
+
+    style D fill:#e1f5fe
+    style F fill:#e1f5fe  
+    style L fill:#e1f5fe
+    style M fill:#4caf50,color:#fff
+    style Q fill:#ff9800,color:#fff
+    style R fill:#4caf50,color:#fff
+```
+
 ## 🌟 What's New vs Legacy Deploy
 
 ### ✅ Added
 - **Infrastructure as Code**: Full Terraform automation
-- **Instance Management**: Start/stop for cost optimization
+- **Instance Management**: Start/stop for cost optimization  
 - **Enhanced Monitoring**: Real-time resource monitoring
 - **Automated Deployment**: One-command infrastructure setup
 - **Cost Optimization**: Built-in cost management tools
 - **Better Documentation**: Comprehensive guides and examples
+- **Automated Fixes**: All deployment issues resolved in user_data.sh
 
 ### 🔄 Improved
 - **Security**: Hardened configurations and best practices
 - **Reliability**: Health checks and automated recovery
 - **Maintainability**: Modular Terraform structure
 - **Operations**: Rich set of management scripts
+- **Deployment**: Zero-touch installation from fresh instance
 
 ### 📦 Preserved
 - **Application Scripts**: All existing deployment scripts moved to `provisioning/`

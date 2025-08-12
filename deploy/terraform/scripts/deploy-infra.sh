@@ -5,8 +5,11 @@ set -e
 # Based on mbot-infra patterns with enhancements
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TERRAFORM_DIR="$(dirname "$SCRIPT_DIR")/environments/prod"
 PROJECT_NAME="cyprine-heroes"
+
+# Default environment
+ENVIRONMENT="${ENVIRONMENT:-prod}"
+TERRAFORM_DIR="$(dirname "$SCRIPT_DIR")/environments/$ENVIRONMENT"
 
 # Colors for output
 RED='\033[0;31m'
@@ -50,14 +53,19 @@ Commands:
 Options:
     -y, --yes   Auto-approve (skip confirmations)
     -v, --var-file FILE  Use custom tfvars file
+    -e, --env ENV        Target environment (default: prod)
 
 Examples:
-    $0 init                    # First time setup
-    $0 plan                    # Preview changes
-    $0 apply                   # Deploy infrastructure
-    $0 output                  # Show connection info
-    $0 ssh                     # Connect to instance
-    $0 status                  # Check instance status
+    $0 init                    # First time setup (prod)
+    $0 plan                    # Preview changes (prod)
+    $0 apply                   # Deploy infrastructure (prod)
+    $0 output                  # Show connection info (prod)
+    $0 ssh                     # Connect to instance (prod)
+    $0 status                  # Check instance status (prod)
+    
+    # Multi-environment examples:
+    ENVIRONMENT=staging $0 apply    # Deploy to staging
+    $0 --env dev plan               # Plan for dev environment
 
 Prerequisites:
     1. AWS CLI configured (aws configure)
@@ -74,7 +82,7 @@ EOF
 }
 
 check_prerequisites() {
-    log "Checking prerequisites..."
+    log "Checking prerequisites for environment: $ENVIRONMENT..."
     
     # Check if AWS CLI is configured
     if ! aws sts get-caller-identity &>/dev/null; then
@@ -232,6 +240,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         -v|--var-file)
             VAR_FILE="$2"
+            shift 2
+            ;;
+        -e|--env)
+            ENVIRONMENT="$2"
+            TERRAFORM_DIR="$(dirname "$SCRIPT_DIR")/environments/$ENVIRONMENT"
             shift 2
             ;;
         -h|--help)

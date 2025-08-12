@@ -1,10 +1,10 @@
 terraform {
-  # Backend configuration - uncomment and configure for remote state
-  # backend "s3" {
-  #   bucket = "cyprine-heroes-terraform-state-prod"
-  #   key    = "prod/terraform.tfstate"
-  #   region = "eu-west-3"
-  # }
+  # Remote state backend configuration
+  backend "s3" {
+    bucket = "cyprineheroes-terraform-state"
+    key    = "prod/terraform.tfstate"
+    region = "eu-west-3"
+  }
 
   required_version = ">= 1.0"
   
