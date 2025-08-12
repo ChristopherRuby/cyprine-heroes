@@ -35,5 +35,5 @@ output "application_url" {
 
 output "application_https_url" {
   description = "HTTPS URL of the application (after SSL setup)"
-  value       = "https://${aws_eip.cyprine_eip.public_ip}"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_eip.cyprine_eip.public_ip}"
 }

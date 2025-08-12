@@ -69,3 +69,9 @@ variable "github_repo" {
   type        = string
   default     = "https://github.com/ChristopherRuby/cyprine-heroes.git"
 }
+
+variable "domain_name" {
+  description = "Domain name for the application (for SSL certificate)"
+  type        = string
+  default     = "heroes.cyprinade.com"
+}

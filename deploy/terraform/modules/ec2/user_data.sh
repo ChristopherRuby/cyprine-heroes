@@ -31,7 +31,8 @@ apt-get install -y \
     fail2ban \
     ufw \
     ca-certificates \
-    gnupg
+    gnupg \
+    snapd
 
 log "System packages installed"
 
@@ -118,10 +119,17 @@ sudo -u cyprine bash -c "source venv/bin/activate && pip install psycopg request
 log "Python dependencies installed (including psycopg)"
 
 # Configure frontend environment
-cat > /opt/cyprine-heroes/frontend/.env << EOF
+if [ -n "${domain_name}" ] && [ "${domain_name}" != "" ]; then
+    cat > /opt/cyprine-heroes/frontend/.env << EOF
+# Production environment variables
+VITE_API_URL=https://${domain_name}/api
+EOF
+else
+    cat > /opt/cyprine-heroes/frontend/.env << EOF
 # Production environment variables
 VITE_API_URL=http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)/api
 EOF
+fi
 
 chown cyprine:cyprine /opt/cyprine-heroes/frontend/.env
 
@@ -196,15 +204,26 @@ systemctl restart rsyslog || true
 
 log "Logging configured"
 
-# Configure Nginx with corrected proxy settings
+# Install Certbot for SSL certificates
+log "Installing Certbot for SSL certificates..."
+snap install core; snap refresh core
+snap install --classic certbot
+ln -sf /snap/bin/certbot /usr/bin/certbot
+
+# Configure initial Nginx (HTTP only for SSL verification)
 cat > /etc/nginx/sites-available/cyprine-frontend << 'EOF'
-# Nginx site for serving built frontend and proxying API (HTTP only)
+# Initial HTTP configuration for SSL verification
 server {
     listen 80;
-    server_name _;
+    server_name ${domain_name};
 
     root /opt/cyprine-heroes/frontend/dist;
     index index.html;
+
+    # Let's Encrypt verification
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
 
     # API proxy - correct proxy pass without double slashes
     location /api/ {
@@ -232,12 +251,102 @@ rm -f /etc/nginx/sites-enabled/default
 chmod 755 /opt/cyprine-heroes/frontend
 chmod 755 /opt/cyprine-heroes
 
-# Test nginx configuration
+# Test and start nginx
 if nginx -t; then
     systemctl reload nginx
-    log "Nginx configured and reloaded with corrected proxy settings"
+    log "Initial Nginx configuration loaded"
 else
     log "Nginx configuration test failed"
+fi
+
+# Obtain SSL certificate if domain is configured
+if [ -n "${domain_name}" ] && [ "${domain_name}" != "" ]; then
+    log "Obtaining SSL certificate for ${domain_name}..."
+    
+    # Wait a bit for nginx to be fully ready
+    sleep 5
+    
+    # Create directory for Let's Encrypt verification
+    mkdir -p /var/www/html/.well-known/acme-challenge/
+    chown -R www-data:www-data /var/www/html
+    
+    # Obtain certificate (non-interactive)
+    if certbot certonly --webroot -w /var/www/html -d ${domain_name} --non-interactive --agree-tos --email admin@cyprinade.com; then
+        log "SSL certificate obtained successfully"
+        
+        # Update Nginx configuration with SSL
+        cat > /etc/nginx/sites-available/cyprine-frontend << 'EOF'
+# Nginx site with SSL/HTTPS configuration
+server {
+    listen 80;
+    server_name ${domain_name};
+    
+    # Redirect all HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${domain_name};
+
+    # SSL Configuration
+    ssl_certificate /etc/letsencrypt/live/${domain_name}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${domain_name}/privkey.pem;
+    
+    # Modern SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    root /opt/cyprine-heroes/frontend/dist;
+    index index.html;
+
+    # API proxy - correct proxy pass without double slashes
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Prevent redirects
+        proxy_redirect off;
+    }
+
+    # Frontend
+    location / {
+        try_files $uri /index.html;
+    }
+    
+    # Let's Encrypt verification (for renewals)
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+}
+EOF
+        
+        # Test and reload nginx with SSL config
+        if nginx -t; then
+            systemctl reload nginx
+            log "SSL configuration applied successfully"
+        else
+            log "SSL configuration test failed"
+        fi
+        
+    else
+        log "Failed to obtain SSL certificate, continuing with HTTP only"
+    fi
+else
+    log "No domain configured, using HTTP only"
 fi
 
 # Setup firewall (basic security)
@@ -308,13 +417,64 @@ echo "Backend service: $(systemctl is-active cyprine-backend)"
 echo "Nginx service: $(systemctl is-active nginx)"
 echo "Disk usage: $(df -h / | tail -1 | awk '{print $5}')"
 echo "Memory usage: $(free -h | grep '^Mem:' | awk '{print $3"/"$2}')"
-echo "Application URL: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
+
+# Check if SSL certificate exists
+if [ -f "/etc/letsencrypt/live/${domain_name}/fullchain.pem" ]; then
+    echo "SSL Certificate: ✅ Active"
+    echo "Certificate expires: $(openssl x509 -enddate -noout -in /etc/letsencrypt/live/${domain_name}/fullchain.pem | cut -d= -f2)"
+    echo "Application URL: https://${domain_name}"
+else
+    echo "SSL Certificate: ❌ Not configured"
+    echo "Application URL: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
+fi
 EOF
 
 chmod +x /home/ubuntu/check-status.sh
 chown ubuntu:ubuntu /home/ubuntu/check-status.sh
 
 log "Status script created at /home/ubuntu/check-status.sh"
+
+# Setup automatic certificate renewal
+if [ -n "${domain_name}" ] && [ "${domain_name}" != "" ]; then
+    log "Setting up automatic certificate renewal..."
+    
+    # Create renewal script
+    cat > /opt/cyprine-heroes/renew-ssl.sh << 'EOF'
+#!/bin/bash
+# SSL Certificate Renewal Script
+
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> /var/log/cyprine-ssl-renewal.log
+}
+
+log "Starting SSL certificate renewal check..."
+
+# Attempt to renew certificates
+if certbot renew --quiet --no-self-upgrade; then
+    log "Certificate renewal check completed successfully"
+    
+    # Test nginx configuration
+    if nginx -t; then
+        systemctl reload nginx
+        log "Nginx reloaded successfully after certificate renewal"
+    else
+        log "ERROR: Nginx configuration test failed after certificate renewal"
+    fi
+else
+    log "Certificate renewal failed or no renewal needed"
+fi
+
+log "SSL renewal script completed"
+EOF
+    
+    chmod +x /opt/cyprine-heroes/renew-ssl.sh
+    chown root:root /opt/cyprine-heroes/renew-ssl.sh
+    
+    # Add to crontab for automatic renewal (twice daily as recommended)
+    (crontab -l 2>/dev/null; echo "0 */12 * * * /opt/cyprine-heroes/renew-ssl.sh") | crontab -
+    
+    log "Automatic SSL certificate renewal configured"
+fi
 
 # Final system status
 /home/ubuntu/check-status.sh >> /var/log/cyprine-setup.log 2>&1

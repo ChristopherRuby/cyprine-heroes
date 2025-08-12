@@ -45,6 +45,7 @@ module "cyprine_ec2" {
   admin_password = var.admin_password
   cors_origins   = var.cors_origins
   github_repo    = var.github_repo
+  domain_name    = var.domain_name
 }
 
 # Provider configuration

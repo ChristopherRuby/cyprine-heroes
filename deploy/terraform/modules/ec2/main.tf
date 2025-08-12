@@ -50,6 +50,7 @@ resource "aws_instance" "cyprine_heroes" {
     cors_origins    = var.cors_origins
     github_repo     = var.github_repo
     project_name    = var.project_name
+    domain_name     = var.domain_name
   }))
 
   tags = {
@@ -72,4 +73,9 @@ resource "aws_eip" "cyprine_eip" {
   }
 
   depends_on = [aws_instance.cyprine_heroes]
+  
+  # Prevent accidental deletion of EIP
+  lifecycle {
+    prevent_destroy = true
+  }
 }
