@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     admin_password: str
     upload_dir: str = "./uploads"
+    cors_origins: str = "*"
     
     class Config:
         env_file = ".env"
