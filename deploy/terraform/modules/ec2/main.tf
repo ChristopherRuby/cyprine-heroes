@@ -63,19 +63,22 @@ resource "aws_instance" "cyprine_heroes" {
   }
 }
 
-# Elastic IP for the instance
+# Elastic IP (découplée de l'instance)
 resource "aws_eip" "cyprine_eip" {
-  instance = aws_instance.cyprine_heroes.id
-  domain   = "vpc"
+  domain = "vpc"
 
   tags = {
     Name = "${var.project_name}-eip"
   }
-
-  depends_on = [aws_instance.cyprine_heroes]
   
   # Prevent accidental deletion of EIP
   lifecycle {
     prevent_destroy = true
   }
+}
+
+# Association séparée EIP <-> EC2
+resource "aws_eip_association" "cyprine_eip_assoc" {
+  instance_id   = aws_instance.cyprine_heroes.id
+  allocation_id = aws_eip.cyprine_eip.id
 }
