@@ -48,22 +48,27 @@ sudo -u cyprine python3.11 -m venv venv
 sudo -u cyprine bash -c "source venv/bin/activate && pip install --upgrade pip && pip install -r backend/requirements.txt && pip install psycopg requests"
 log "Python environment ready"
 
-# Configure frontend environment - start with IP-based URL
-PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-cat > /opt/cyprine-heroes/frontend/.env << EOF
+# Configure frontend environment - use domain if provided, otherwise IP
+if [ -n "${domain_name}" ] && [ "${domain_name}" != "" ]; then
+    # Build with HTTPS from the start if domain is provided (SSL will be added later)
+    cat > /opt/cyprine-heroes/frontend/.env << EOF
+VITE_API_URL=https://${domain_name}/api
+EOF
+    log "Frontend configured for domain: https://${domain_name}/api"
+else
+    PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+    cat > /opt/cyprine-heroes/frontend/.env << EOF
 VITE_API_URL=http://$PUBLIC_IP/api
 EOF
+    log "Frontend configured with IP-based API URL: http://$PUBLIC_IP/api"
+fi
 chown cyprine:cyprine /opt/cyprine-heroes/frontend/.env
-log "Frontend configured with IP-based API URL: http://$PUBLIC_IP/api"
 
-# Ensure proper ownership before build
-rm -rf /opt/cyprine-heroes/frontend/dist
-mkdir -p /opt/cyprine-heroes/frontend/dist
-chown -R cyprine:cyprine /opt/cyprine-heroes/frontend/dist
+# Install frontend dependencies first
+cd /opt/cyprine-heroes/frontend && sudo -u cyprine npm ci
+log "Frontend dependencies installed"
 
-cd /opt/cyprine-heroes/frontend && sudo -u cyprine npm ci && sudo -u cyprine npm run build
-chmod -R 755 /opt/cyprine-heroes/frontend/dist && chown -R www-data:www-data /opt/cyprine-heroes/frontend/dist
-log "Frontend built"
+# We'll build the frontend AFTER nginx/SSL is configured to ensure correct API URL
 
 mkdir -p /opt/cyprine-heroes/backend/uploads
 chown -R cyprine:cyprine /opt/cyprine-heroes/backend/uploads
@@ -181,23 +186,6 @@ EOF
         if nginx -t; then 
             systemctl reload nginx; 
             log "HTTPS configured"; 
-            
-            # Update frontend to use HTTPS now that SSL is working
-            cat > /opt/cyprine-heroes/frontend/.env << EOF
-VITE_API_URL=https://${domain_name}/api
-EOF
-            chown cyprine:cyprine /opt/cyprine-heroes/frontend/.env
-            log "Frontend environment updated to HTTPS: https://${domain_name}/api"
-            
-            # Rebuild frontend with HTTPS API URL
-            # Clean dist directory and fix ownership before rebuild
-            rm -rf /opt/cyprine-heroes/frontend/dist
-            mkdir -p /opt/cyprine-heroes/frontend/dist
-            chown -R cyprine:cyprine /opt/cyprine-heroes/frontend/dist
-            
-            cd /opt/cyprine-heroes/frontend && sudo -u cyprine npm run build
-            chmod -R 755 /opt/cyprine-heroes/frontend/dist && chown -R www-data:www-data /opt/cyprine-heroes/frontend/dist
-            log "Frontend rebuilt with HTTPS configuration"
         fi
         
         echo '#!/bin/bash
@@ -212,6 +200,16 @@ fi' > /opt/cyprine-heroes/renew-ssl.sh
         log "SSL setup failed, continuing with HTTP"
     fi
 fi
+
+# Now build frontend with the final configuration (HTTP or HTTPS)
+log "Building frontend with final configuration..."
+rm -rf /opt/cyprine-heroes/frontend/dist
+mkdir -p /opt/cyprine-heroes/frontend/dist  
+chown -R cyprine:cyprine /opt/cyprine-heroes/frontend/dist
+
+cd /opt/cyprine-heroes/frontend && sudo -u cyprine npm run build
+chmod -R 755 /opt/cyprine-heroes/frontend/dist && chown -R www-data:www-data /opt/cyprine-heroes/frontend/dist
+log "Frontend built with API URL: $(grep VITE_API_URL /opt/cyprine-heroes/frontend/.env)"
 
 # Configure firewall
 ufw --force enable && ufw allow ssh && ufw allow 'Nginx Full'
