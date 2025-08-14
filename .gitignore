@@ -32,8 +32,11 @@ htmlcov/
 # Environments & IDE
 .env
 .env.local
+.env.production
 backend/.env
+backend/.env.production
 frontend/.env
+frontend/.env.production
 database/.env
 .env.*.local
 .venv/
