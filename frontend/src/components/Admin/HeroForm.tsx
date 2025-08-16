@@ -123,7 +123,7 @@ const HeroForm: React.FC<HeroFormProps> = ({ hero, onSave, onCancel }) => {
   };
 
   const characterCount = formData.description.length;
-  const maxChars = 1000;
+  const maxChars = 3000; // Augmenté de 1000 à 3000 caractères
 
   return (
     <div className="bg-gradient-to-br from-cyprine-darker to-cyprine-dark p-6 rounded-lg border border-gray-700">
@@ -199,10 +199,10 @@ const HeroForm: React.FC<HeroFormProps> = ({ hero, onSave, onCancel }) => {
             name="description"
             value={formData.description}
             onChange={handleInputChange}
-            rows={4}
+            rows={8}
             maxLength={maxChars}
-            className="w-full px-3 py-2 bg-cyprine-darker border border-gray-600 rounded-lg text-white focus:outline-none focus:border-cyprine-cyan resize-none"
-            placeholder="Décrivez la personnalité, l'histoire et les traits du héros..."
+            className="w-full px-4 py-3 bg-cyprine-darker border border-gray-600 rounded-lg text-white focus:outline-none focus:border-cyprine-cyan resize-vertical min-h-[200px] leading-relaxed"
+            placeholder="Décrivez la personnalité, l'histoire et les traits du héros...&#10;&#10;Vous pouvez inclure :&#10;• Son origine et son passé&#10;• Ses motivations et objectifs&#10;• Sa personnalité et ses traits&#10;• Ses relations avec d'autres héros"
             required
           />
           <div className="text-right text-sm text-gray-400 mt-1">
