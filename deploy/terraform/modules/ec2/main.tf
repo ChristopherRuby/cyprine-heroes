@@ -73,7 +73,7 @@ resource "aws_eip" "cyprine_eip" {
   
   # Prevent accidental deletion of EIP
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
